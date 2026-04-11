@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+latest_scan_report.txt
+latest_run_status.json
+latest_run_summary.txt
+dist/
+build/
+*.egg-info/
