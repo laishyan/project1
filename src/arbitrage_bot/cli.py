@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 
@@ -45,6 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
     history_parser = subparsers.add_parser("history", parents=[common], help="Show recent saved opportunities from SQLite")
     history_parser.add_argument("--limit", type=int, default=20, help="How many saved opportunities to show")
     subparsers.add_parser("once", parents=[common], help="Run a single live scan")
+    ui_parser = subparsers.add_parser("ui", parents=[common], help="Launch the interactive Textual dashboard")
+    ui_parser.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds")
+    ui_parser.add_argument("--stop-after-opportunities", type=int, default=0, help="Pause the live scanner after this many unique profitable opportunities")
+    ui_parser.add_argument("--demo", action="store_true", help="Run the dashboard against built-in demo data")
+    streamlit_parser = subparsers.add_parser("streamlit-ui", parents=[common], help="Launch the Streamlit dashboard in a browser")
+    streamlit_parser.add_argument("--demo", action="store_true", help="Open the Streamlit dashboard with demo mode selected by default")
+    streamlit_parser.add_argument("--history-limit", type=int, default=15, help="Default number of saved SQLite opportunities to display")
+    streamlit_parser.add_argument("--interval", type=float, default=5.0, help="Default live auto-scan interval in seconds")
     scan_parser = subparsers.add_parser("scan", parents=[common], help="Run the live scanner in a loop")
     scan_parser.add_argument("--interval", type=float, default=10.0, help="Polling interval in seconds")
     scan_parser.add_argument(
@@ -229,6 +238,16 @@ def configure_logging(verbose: bool) -> None:
         logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
+def configure_ui_logging(verbose: bool) -> None:
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+    root_logger.setLevel(logging.DEBUG)
+    logging.getLogger("httpx").setLevel(logging.DEBUG)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.INFO if verbose else logging.WARNING)
+
+
 async def run_demo(skip_db: bool, verbose: bool) -> int:
     logger.info("Starting demo mode")
     poly, kalshi = build_demo_markets()
@@ -329,6 +348,32 @@ async def run_history(limit: int) -> int:
             )
     print("\n".join(lines))
     return 0
+
+
+def run_ui(*, interval: float, stop_after_opportunities: int, skip_db: bool, demo: bool) -> int:
+    from .tui.app import ArbitrageTextualApp
+
+    app = ArbitrageTextualApp(
+        interval=interval,
+        stop_after_opportunities=stop_after_opportunities,
+        skip_db=skip_db,
+        demo=demo,
+    )
+    app.run()
+    return 0
+
+
+def run_streamlit_ui(*, demo: bool, skip_db: bool, history_limit: int, interval: float) -> int:
+    from streamlit.web import cli as stcli
+
+    os.environ["ARBITRAGE_STREAMLIT_DEFAULT_MODE"] = "demo" if demo else "live"
+    os.environ["ARBITRAGE_STREAMLIT_SKIP_DB"] = "1" if skip_db else "0"
+    os.environ["ARBITRAGE_STREAMLIT_HISTORY_LIMIT"] = str(history_limit)
+    os.environ["ARBITRAGE_STREAMLIT_INTERVAL"] = str(interval)
+
+    app_path = Path(__file__).with_name("streamlit_app.py")
+    sys.argv = ["streamlit", "run", str(app_path)]
+    return stcli.main()
 
 
 async def run_once(skip_db: bool, verbose: bool) -> int:
@@ -539,7 +584,10 @@ async def run_scan(interval: float, skip_db: bool, verbose: bool, stop_after_opp
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    configure_logging(args.verbose)
+    if args.command == "ui":
+        configure_ui_logging(args.verbose)
+    else:
+        configure_logging(args.verbose)
     try:
         if args.command == "demo":
             raise SystemExit(asyncio.run(run_demo(skip_db=args.skip_db, verbose=args.verbose)))
@@ -551,6 +599,24 @@ def main() -> None:
             raise SystemExit(asyncio.run(run_history(limit=args.limit)))
         if args.command == "once":
             raise SystemExit(asyncio.run(run_once(skip_db=args.skip_db, verbose=args.verbose)))
+        if args.command == "ui":
+            raise SystemExit(
+                run_ui(
+                    interval=args.interval,
+                    stop_after_opportunities=args.stop_after_opportunities,
+                    skip_db=args.skip_db,
+                    demo=args.demo,
+                )
+            )
+        if args.command == "streamlit-ui":
+            raise SystemExit(
+                run_streamlit_ui(
+                    demo=args.demo,
+                    skip_db=args.skip_db,
+                    history_limit=args.history_limit,
+                    interval=args.interval,
+                )
+            )
         if args.command == "scan":
             raise SystemExit(
                 asyncio.run(

@@ -7,6 +7,7 @@ This project implements the Phase 1 and Phase 2 core of the provided spec:
 - fee and slippage estimation before surfacing opportunities
 - SQLite persistence for market snapshots and opportunities
 - a CLI with live and demo modes
+- two side-by-side UIs: the existing Textual terminal dashboard and a separate Streamlit browser dashboard
 
 ## What it does
 
@@ -28,8 +29,9 @@ The detector computes:
 1. Install Python 3.11+.
 2. Create and activate a virtual environment.
 3. Install the package with `pip install -e .[dev]`.
-4. Copy `.env.example` to `.env` and adjust values.
-5. Pick a location for the SQLite database file in `SQLITE_PATH`.
+4. To use the Streamlit dashboard too, install the optional UI extra with `pip install -e .[dev,streamlit]`.
+5. Copy `.env.example` to `.env` and adjust values.
+6. Pick a location for the SQLite database file in `SQLITE_PATH`.
 
 ## Run
 
@@ -62,6 +64,40 @@ Verbose continuous scan:
 ```bash
 arbitrage-bot scan --interval 10 --verbose
 ```
+
+Launch the existing terminal dashboard:
+
+```bash
+arbitrage-bot ui --demo
+```
+
+Launch the new Streamlit dashboard in a browser:
+
+```bash
+arbitrage-bot streamlit-ui --demo
+```
+
+Launch the Streamlit dashboard with continuous live rescans every 3 seconds:
+
+```bash
+arbitrage-bot streamlit-ui --interval 3
+```
+
+You can also launch the Streamlit entry point directly:
+
+```bash
+arbitrage-bot-streamlit --demo
+```
+
+The Streamlit dashboard includes:
+
+- interval-based live rescanning
+- non-blocking background scanning with fragment-based UI updates, so the whole page no longer hard-reloads
+- rolling price charts for matched Kalshi and Polymarket pairs
+- platform-wide live market charts for raw Polymarket and Kalshi data
+- latency heartbeat metrics, session stats, a scanner terminal feed, and recent SQLite trades
+- trade-size take-home estimates, liquidity bars, confidence scores, and CSV/JSON export
+- saved opportunity history from SQLite
 
 Skip writes to the database:
 
